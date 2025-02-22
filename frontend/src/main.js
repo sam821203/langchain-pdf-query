@@ -1,14 +1,24 @@
-import './assets/main.css'
+import "./assets/main.css";
 
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import { library } from "@fortawesome/fontawesome-svg-core";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 
-import App from './App.vue'
-import router from './router'
+import App from "./App.vue";
+import router from "./router";
+import {
+  faFilePdf,
+  faCloudUploadAlt,
+  faArrowUp,
+} from "@fortawesome/free-solid-svg-icons";
 
-const app = createApp(App)
+library.add(faFilePdf, faCloudUploadAlt, faArrowUp);
 
-app.use(createPinia())
-app.use(router)
+const app = createApp(App);
 
-app.mount('#app')
+app.use(createPinia());
+app.use(router);
+app.component("font-awesome-icon", FontAwesomeIcon);
+
+app.mount("#app");
