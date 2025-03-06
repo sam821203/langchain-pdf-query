@@ -38,8 +38,6 @@ query_chain = None
 current_pdf_path = None
 
 def initialize_pdf(pdf_path):
-    """Initialize or reinitialize the PDF processing chain"""
-    # global vectorstores, query_chain
     global vectorstores, query_chain, current_pdf_path
     current_pdf_path = pdf_path
     vectorstores = load_and_create_vector_store(current_pdf_path)
@@ -47,9 +45,7 @@ def initialize_pdf(pdf_path):
 
 @app.post("/upload-pdf", response_model=dict)
 async def upload_pdf(file: UploadFile = File(...)):
-    """
-    接收 PDF 檔案並初始化查詢鏈
-    """
+    # 接收 PDF 檔案並初始化查詢鏈
     try:
         # 生成唯一的檔名，避免檔案名稱衝突
         print("收到的檔案：", file.filename)
