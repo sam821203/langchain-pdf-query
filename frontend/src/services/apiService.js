@@ -8,7 +8,7 @@ const api = axios.create({
 });
 
 // 上傳 PDF
-export const uploadPDFFile = async (file) => {
+export const analyzePDFFile = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
 

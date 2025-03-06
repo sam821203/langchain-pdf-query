@@ -1,7 +1,7 @@
 <template>
   <div class="home-container">
     <h1 class="title">Smart PDF Query</h1>
-    <h3 class="description">Ask any PDF-related questions to get started!</h3>
+    <h3 class="description">{{ uploadStatus }}</h3>
     <!-- Input Area -->
     <div class="input-area">
       <div class="input-wrapper">
@@ -36,49 +36,40 @@
         <textarea
           id="messageInput"
           rows="1"
-          :placeholder="animatedPlaceholder"
+          placeholder="Analyze a PDF..."
+          readonly
+          class="mock-textarea"
         ></textarea>
 
         <!-- upload PDF -->
         <button
           class="send-button"
-          @click="uploadPDF"
+          @click="analyzePDF"
           :disabled="!selectedFile"
         >
           <font-awesome-icon icon="arrow-up" />
         </button>
       </div>
     </div>
-    <p v-if="uploadStatus" class="upload-status">{{ uploadStatus }}</p>
-
-    <!-- PDF 上傳區 -->
-    <!-- <div class="upload-box">
-      <input type="file" @change="handleFileUpload" accept="application/pdf" />
-      <button
-        @click="uploadPDF"
-        class="upload-button"
-        :disabled="!selectedFile"
-      >
-        上傳 PDF
-      </button>
-      <p v-if="uploadStatus" class="upload-status">{{ uploadStatus }}</p>
-    </div> -->
 
     <!-- 查詢區 -->
     <div class="query-box">
-      <input
+      <textarea
         v-model="question"
         placeholder="請輸入問題"
-        class="input-field"
+        class="input-field textarea-field"
         :disabled="!isPDFUploaded"
-      />
-      <button
-        @click="queryAPI"
-        class="query-button"
-        :disabled="!isPDFUploaded || !question"
-      >
-        查詢
-      </button>
+        rows="6"
+      ></textarea>
+      <div class="query-button__wrapper">
+        <button
+          @click="queryAPI"
+          class="query-button"
+          :disabled="!isPDFUploaded || !question"
+        >
+          查詢
+        </button>
+      </div>
     </div>
 
     <!-- 回答區 -->
@@ -87,68 +78,52 @@
 </template>
 
 <script setup>
-import { ref, onUnmounted } from "vue";
-import { queryPDF, uploadPDFFile } from "../services/apiService";
+import { ref } from "vue";
+import { queryPDF, analyzePDFFile } from "../services/apiService";
+import { useLoading } from "vue-loading-overlay";
 
 const question = ref("");
 const answer = ref("");
 const selectedFile = ref(null);
-const uploadStatus = ref("");
+const uploadStatus = ref("Upload PDF to get started!");
 const isPDFUploaded = ref(false); // 確保 PDF 上傳後才能查詢
 const fileInput = ref(null);
-const animatedPlaceholder = ref("Upload a PDF...");
-const placeholderTexts = [
-  "Uploading...",
-  "Almost there...",
-  "Processing PDF...",
-  "Just a moment...",
-];
-let placeholderIndex = 0;
-let animationInterval = null;
+const $loading = useLoading();
+const loadingConfig = {
+  color: "#e74c3c",
+  loader: "dots",
+  backgroundColor: "#000000",
+  width: 56,
+  height: 56,
+  opacity: 0.75,
+  zIndex: 999,
+};
 
 const triggerFileUpload = () => {
-  fileInput.value.click(); // 觸發隱藏的 input 點擊事件
+  // 觸發隱藏的 input 點擊事件
+  fileInput.value.click();
 };
 
 // 處理選擇的檔案
 const handleFileUpload = (event) => {
   selectedFile.value = event.target.files[0];
-  console.log("選擇的檔案：", selectedFile.value);
-};
-
-const startPlaceholderAnimation = () => {
-  animationInterval = setInterval(() => {
-    animatedPlaceholder.value =
-      placeholderTexts[placeholderIndex % placeholderTexts.length];
-    placeholderIndex++;
-  }, 1000);
-};
-
-const stopPlaceholderAnimation = () => {
-  if (animationInterval) {
-    clearInterval(animationInterval);
-    animationInterval = null;
-    animatedPlaceholder.value = "Ask anything about your PDF...";
-  }
 };
 
 // 上傳 PDF
-const uploadPDF = async () => {
-  console.log("上傳PDF");
+const analyzePDF = async () => {
   if (!selectedFile.value) return;
-
-  uploadStatus.value = "Uploading...";
-  startPlaceholderAnimation();
-
+  uploadStatus.value = "Analyzing...";
+  const loader = $loading.show(loadingConfig);
   try {
-    await uploadPDFFile(selectedFile.value);
-    uploadStatus.value = "✅ Upload successful! You can now ask questions.";
+    await analyzePDFFile(selectedFile.value);
+    uploadStatus.value =
+      "✅ Successful! You can now ask any PDF-related questions~";
     isPDFUploaded.value = true;
-    stopPlaceholderAnimation();
   } catch (error) {
     console.error("PDF upload failed", error);
-    uploadStatus.value = "❌ Upload failed, please try again.";
-    stopPlaceholderAnimation();
+    uploadStatus.value = "❌ Analyze failed, please try again.";
+  } finally {
+    loader.hide();
   }
 };
 
@@ -156,7 +131,6 @@ const removePDF = () => {
   selectedFile.value = null;
   isPDFUploaded.value = false;
   uploadStatus.value = "";
-  animatedPlaceholder.value = "Upload a PDF...";
 };
 
 const queryAPI = async () => {
@@ -168,11 +142,6 @@ const queryAPI = async () => {
     answer.value = "查詢失敗，請稍後再試";
   }
 };
-
-// 確保離開元件時停止動畫
-onUnmounted(() => {
-  stopPlaceholderAnimation();
-});
 </script>
 
 <style scoped>
@@ -182,14 +151,17 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background-color: #f8f9fa;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
+    url("https://img.pikbest.com/back_our/20210415/bg/35f18e92435e3.png!w700wp")
+      center/cover no-repeat;
+  color: white;
 }
 
 .title {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 20px;
-  color: #333;
 }
 
 .description {
@@ -198,7 +170,6 @@ onUnmounted(() => {
   margin-bottom: 40px;
 }
 
-/* 上傳 PDF */
 .upload-box {
   display: flex;
   flex-direction: column;
@@ -223,31 +194,57 @@ onUnmounted(() => {
 
 .upload-status {
   margin-top: 5px;
-  color: #555;
+  margin-bottom: 48px;
 }
 
-/* 查詢區 */
 .query-box {
-  display: flex;
   gap: 10px;
-  background: #fff;
-  padding: 20px;
+  width: 100%;
+  max-width: 700px;
+  margin-bottom: 24px;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .input-field {
+  display: block;
+  width: 100%;
   padding: 10px;
   font-size: 1rem;
   border: 1px solid #ccc;
   border-radius: 5px;
-  width: 250px;
+  margin-bottom: 12px;
+}
+
+.query-button__wrapper {
+  display: flex;
+  justify-content: end;
+}
+
+.textarea-field {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 16px;
+  resize: none;
+  outline: none;
+  transition:
+    box-shadow 0.3s ease,
+    color 0.3s ease;
+}
+
+.textarea-field:focus {
+  border-color: #e74c3c;
+  border-width: 1.5px;
+  box-shadow: 0 0 15px rgba(231, 76, 60, 0.5);
 }
 
 .query-button {
-  padding: 10px 20px;
+  padding: 10px 32px;
   font-size: 1rem;
-  background-color: #007bff;
+  background-color: #e74c3c;
   color: white;
   border: none;
   border-radius: 5px;
@@ -256,46 +253,42 @@ onUnmounted(() => {
 }
 
 .query-button:hover {
-  background-color: #0056b3;
+  background-color: #c94334;
 }
 
 .query-button:disabled {
-  background-color: #ccc;
+  background-color: #d6bab8;
+  cursor: not-allowed;
+  user-select: none;
 }
 
 .answer-box {
-  margin-top: 20px;
-  padding: 15px;
-  background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  max-width: 400px;
+  max-width: 600px;
   text-align: center;
 }
 
-/* Input Area Styling */
 .input-area {
   width: 100%;
-  max-width: 700px; /* Match ChatGPT's input width */
+  max-width: 700px;
   display: flex;
   justify-content: center;
-  margin-bottom: 20px; /* Space below input */
-  position: relative; /* For positioning PDF upload circle */
+  margin-bottom: 12px;
+  position: relative;
 }
 
-/* Input Wrapper Styling */
 .input-wrapper {
   display: flex;
   align-items: center;
-  padding: 10px 15px; /* Padding inside the input */
+  padding: 10px 15px;
   border: 1px solid #d7d3d3;
-  border-radius: 8px; /* Border radius of 8px */
+  border-radius: 8px;
   width: 100%;
   background-color: #ffffff;
-  position: relative; /* For positioning PDF upload circle */
+  position: relative;
 }
 
-/* Textarea Styling */
 textarea {
   flex-grow: 1;
   border: none;
@@ -304,13 +297,12 @@ textarea {
   padding: 10px;
   font-size: 1rem;
   resize: none;
-  min-height: 40px; /* Minimum height */
-  max-height: 120px; /* Maximum height before scrollbar appears */
-  overflow-y: auto; /* Show scrollbar when max-height is reached */
-  transition: height 0.2s ease; /* Smooth transition */
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  transition: height 0.2s ease;
 }
 
-/* Upload Icon Wrapper Styling */
 .upload-icon-wrapper {
   width: 35px;
   height: 35px;
@@ -318,39 +310,32 @@ textarea {
   justify-content: center;
   align-items: center;
   border: 1px solid #d7d3d3;
-  border-radius: 8px; /* Rounded corners */
-  background-color: #ffffff; /* White background */
+  border-radius: 8px;
+  background-color: #ffffff;
   margin-right: 10px;
   cursor: pointer;
   transition: background-color 0.3s;
-  outline: none; /* Remove default outline */
+  outline: none;
 }
 
-/* Hover Effect for Upload Icon */
 .upload-icon-wrapper:hover {
   background-color: #e2e6ea;
 }
 
-/* Remove Blue Outline on Focus */
 .upload-icon-wrapper:focus {
   outline: none;
 }
 
-/* Upload Icon Styling */
 .upload-icon {
   font-size: 16px;
   color: #000000;
 }
 
-/* 
-      
-      
-      Button Styling */
 .send-button {
-  background-color: #007bff;
+  background-color: #e74c3c;
   border: none;
-  border-radius: 8px; /* Rounded corners to match upload icon */
-  padding: 8px 12px; /* Increased padding for better size */
+  border-radius: 8px;
+  padding: 8px 12px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -359,20 +344,17 @@ textarea {
   cursor: pointer;
   transition: background-color 0.3s;
   margin-left: 10px;
-  outline: none; /* Remove default outline */
+  outline: none;
 }
 
-/* Hover Effect for Send Button */
 .send-button:hover {
-  background-color: #0056b3;
+  background-color: #c94334;
 }
 
-/* Remove Blue Outline on Focus */
 .send-button:focus {
   outline: none;
 }
 
-/* Cursor Styling for Interactive Elements */
 .nav-link:hover,
 .send-button:hover,
 .upload-icon-wrapper:hover,
@@ -381,13 +363,11 @@ textarea {
   cursor: pointer;
 }
 
-/* Cursor Styling for Textarea */
 textarea:hover,
 textarea:focus {
   cursor: text;
 }
 
-/* Prevent Text Selection on Buttons */
 .nav-link,
 .toggle-button,
 .send-button,
@@ -396,25 +376,23 @@ textarea:focus {
   user-select: none;
 }
 
-/* Focus Styles for Accessibility */
 .nav-link:focus,
 .toggle-button:focus,
 .send-button:focus,
 .upload-icon-wrapper:focus,
 #userEmailButton:focus {
-  outline: none; /* Remove default outline */
+  outline: none;
 }
 
-/* PDF Upload Circle Styling */
 .pdf-upload-circle {
-  display: none; /* Hidden by default */
+  display: none;
   position: absolute;
-  top: -20px; /* Position above the input field */
+  top: -20px;
   left: 10px;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 3px solid yellow; /* Yellow stroke for upload progress */
+  border: 3px solid yellow;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -425,13 +403,11 @@ textarea:focus {
     transform 0.3s ease;
 }
 
-/* PDF Icon within Circle */
 .pdf-upload-circle i {
   font-size: 16px;
-  color: red; /* Red color to indicate PDF */
+  color: red;
 }
 
-/* 'X' Button to Delete Uploaded PDF */
 .pdf-upload-circle .delete-pdf {
   position: absolute;
   top: -5px;
@@ -447,27 +423,30 @@ textarea:focus {
   font-size: 10px;
   color: #ff0000;
   cursor: pointer;
-  display: none; /* Hidden by default */
+  display: none;
 }
 
-/* Show 'X' on Hover */
 .pdf-upload-circle:hover .delete-pdf {
   display: flex;
 }
 
-/* PDF Upload Progress Styling */
 .pdf-upload-circle.uploading {
-  border: 3px solid orange; /* Change color during upload */
-  animation: spin 2s linear infinite; /* Spinner animation */
+  border: 3px solid orange;
+  animation: spin 2s linear infinite;
 }
 
-/* Spinner Animation */
+.mock-textarea {
+  pointer-events: none;
+  caret-color: transparent;
+  user-select: none;
+  cursor: not-allowed;
+}
+
 @keyframes spin {
-  0% {
+  from {
     transform: rotate(0deg);
   }
-
-  100% {
+  to {
     transform: rotate(360deg);
   }
 }
