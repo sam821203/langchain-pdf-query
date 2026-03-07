@@ -40,7 +40,7 @@ def load_and_create_vector_store(pdf_path):
         vectorstores = None
 
         # 建立新的嵌入向量
-        embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
         # 解析 PDF
         loader = PyPDFLoader(pdf_path)

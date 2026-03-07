@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
 def create_query_chain(vectorstore):
-    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
     prompt = ChatPromptTemplate.from_template("""
