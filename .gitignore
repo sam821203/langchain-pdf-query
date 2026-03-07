@@ -30,5 +30,10 @@ coverage
 
 *.tsbuildinfo
 
+# Python
+__pycache__/
+*.pyc
+
 # backend 底下特定資料夾
 backend/uploaded_pdfs/
+backend/vector/
