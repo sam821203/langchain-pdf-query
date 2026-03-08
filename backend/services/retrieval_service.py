@@ -41,11 +41,16 @@ def build_rag_chain(vectorstore: Any, bm25_retriever: BM25Retriever) -> Any:
         temperature=settings.llm_temperature,
         openai_api_key=settings.openai_api_key or None,
     )
-    prompt = ChatPromptTemplate.from_template("""
-請根據以下內容回答問題。如果無法從內容中找到答案，請回答「我無法從提供的內容中找到相關資訊」。
-內容：{context}
-問題：{input}
-""")
+    # Build system: inject no_match_instruction (placeholder or append)
+    system_raw = settings.rag_system_prompt
+    if "{no_match_instruction}" in system_raw:
+        system_str = system_raw.replace("{no_match_instruction}", settings.rag_no_match_instruction)
+    else:
+        system_str = system_raw.rstrip() + "\n\n" + settings.rag_no_match_instruction
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_str),
+        ("human", settings.rag_user_template),
+    ])
 
     async def _retrieve_and_generate(x: dict[str, Any]) -> dict[str, Any]:
         question = x.get("input", "")
