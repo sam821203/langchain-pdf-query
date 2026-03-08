@@ -56,12 +56,13 @@ PDF Query App with LangChain, Python, and Vue.js. This application enables users
 
 ## Running the App
 
-1. Start Backend Service
+1. Start Backend Service (from project root so `.env` is loaded):
 
    ```bash
-   cd backend
-   python main.py
+   poetry run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
    ```
+
+   Or: `poetry run python -m backend.main`
 
 2. Start Frontend Service
 
