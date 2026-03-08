@@ -1,20 +1,27 @@
+"""FastAPI app: CORS, exception handlers, router. Load .env from project root."""
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Load .env from project root (parent of backend/)
+_root = Path(__file__).resolve().parent.parent
+load_dotenv(_root / ".env")
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel
-from pdf_processing import load_and_create_vector_store
-from query_chain import create_query_chain
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import shutil
-import uuid
+from fastapi.responses import JSONResponse
 
-# 初始化 FastAPI 應用
+from backend.core.config import settings
+from backend.core.exceptions import (
+    AppException,
+    NoPDFLoadedError,
+    OpenAITimeoutError,
+    PDFParseError,
+    VectorStoreError,
+)
+from backend.api.routes import router
+
 app = FastAPI()
 
-# 設定 CORS 規則
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,105 +30,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 定義請求和回應格式
-class QueryRequest(BaseModel):
-    question: str
 
-class QueryResponse(BaseModel):
-    answer: str
+def _exception_response(exc: AppException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "type": exc.type_name},
+    )
 
-class PDFUpdateRequest(BaseModel):
-    pdf_path: str
 
-# 設定儲存 PDF 的暫存資料夾
-UPLOAD_FOLDER = "./uploaded_pdfs"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+@app.exception_handler(PDFParseError)
+async def pdf_parse_handler(_request: Request, exc: PDFParseError) -> JSONResponse:
+    return _exception_response(exc)
 
-vectorstores = None
-query_chain = None
-current_pdf_path = None
 
-def initialize_pdf(pdf_path):
-    global vectorstores, query_chain, current_pdf_path
-    current_pdf_path = pdf_path
-    vectorstores, bm25_retriever = load_and_create_vector_store(current_pdf_path)
-    if vectorstores is not None:
-        query_chain = create_query_chain(vectorstores, bm25_retriever)
-    else:
-        query_chain = None
-    # #region agent log
-    try:
-        os.makedirs("/Users/huangyuhao/pdf-query-app/.cursor", exist_ok=True)
-        open("/Users/huangyuhao/pdf-query-app/.cursor/debug.log", "a").write(
-            __import__("json").dumps({"id": "log_init_done", "timestamp": __import__("time").time() * 1000, "location": "main.py:initialize_pdf", "message": "initialize_pdf done", "data": {"query_chain_is_none": query_chain is None, "vectorstores_is_none": vectorstores is None}, "hypothesisId": "A,C"}) + "\n"
-        )
-    except Exception:
-        pass
-    # #endregion
+@app.exception_handler(OpenAITimeoutError)
+async def openai_timeout_handler(_request: Request, exc: OpenAITimeoutError) -> JSONResponse:
+    return _exception_response(exc)
 
-@app.post("/upload-pdf", response_model=dict)
-async def upload_pdf(file: UploadFile = File(...)):
-    # 接收 PDF 檔案並初始化查詢鏈
-    try:
-        # 生成唯一的檔名，避免檔案名稱衝突
-        file_ext = file.filename.split(".")[-1].lower()
-        if file_ext != "pdf":
-            raise HTTPException(status_code=400, detail="僅支援 PDF 檔案")
 
-        file_id = str(uuid.uuid4())  # 生成唯一 ID
-        file_path = os.path.join(UPLOAD_FOLDER, f"{file_id}.pdf")
-        # 儲存檔案
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+@app.exception_handler(VectorStoreError)
+async def vector_store_handler(_request: Request, exc: VectorStoreError) -> JSONResponse:
+    return _exception_response(exc)
 
-        # 初始化查詢鏈
-        initialize_pdf(file_path)
-        # #region agent log
-        try:
-            os.makedirs("/Users/huangyuhao/pdf-query-app/.cursor", exist_ok=True)
-            open("/Users/huangyuhao/pdf-query-app/.cursor/debug.log", "a").write(
-                __import__("json").dumps({"id": "log_upload_after_init", "timestamp": __import__("time").time() * 1000, "location": "main.py:upload_pdf", "message": "upload_pdf after initialize_pdf", "data": {"query_chain_is_none": query_chain is None}, "hypothesisId": "A"}) + "\n"
-            )
-        except Exception:
-            pass
-        # #endregion
-        return {"message": "PDF 上傳並初始化成功", "pdf_path": file_path}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"上傳 PDF 時發生錯誤：{str(e)}")
+@app.exception_handler(NoPDFLoadedError)
+async def no_pdf_loaded_handler(_request: Request, exc: NoPDFLoadedError) -> JSONResponse:
+    return _exception_response(exc)
 
-# 查詢 API：根據使用者問題從上傳的 PDF 中檢索答案
-@app.post("/query", response_model=QueryResponse)
-async def query(request: QueryRequest):
-    # #region agent log
-    try:
-        os.makedirs("/Users/huangyuhao/pdf-query-app/.cursor", exist_ok=True)
-        open("/Users/huangyuhao/pdf-query-app/.cursor/debug.log", "a").write(
-            __import__("json").dumps({"id": "log_query_entry", "timestamp": __import__("time").time() * 1000, "location": "main.py:query", "message": "query entry", "data": {"query_chain_is_none": query_chain is None, "question_len": len(request.question) if request.question else 0}, "hypothesisId": "A,E"}) + "\n"
-        )
-    except Exception:
-        pass
-    # #endregion
-    try:
-        if query_chain is None:
-            raise HTTPException(status_code=400, detail="尚未上傳 PDF")
 
-        response = query_chain.invoke({"input": request.question})
-        return QueryResponse(answer=response["answer"])
-    
-    except Exception as e:
-        # #region agent log
-        try:
-            os.makedirs("/Users/huangyuhao/pdf-query-app/.cursor", exist_ok=True)
-            open("/Users/huangyuhao/pdf-query-app/.cursor/debug.log", "a").write(
-                __import__("json").dumps({"id": "log_query_ex", "timestamp": __import__("time").time() * 1000, "location": "main.py:query", "message": "query exception", "data": {"type": type(e).__name__, "str_e": str(e), "detail": getattr(e, "detail", None)}, "hypothesisId": "B,D"}) + "\n"
-            )
-        except Exception:
-            pass
-        # #endregion
-        raise HTTPException(status_code=500, detail=f"查詢錯誤：{str(e)}")
-    
-# 設定根端點
-@app.get("/")
-async def root():
-    return {"message": "歡迎來到PDF內容查詢系統！請上傳 PDF 來開始分析。"}
+@app.exception_handler(Exception)
+async def generic_handler(_request: Request, exc: Exception) -> JSONResponse:
+    import logging
+    logging.getLogger("pdf_query").exception("Unhandled exception")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "伺服器發生錯誤", "type": type(exc).__name__},
+    )
+
+
+# Ensure upload directory exists on startup
+@app.on_event("startup")
+async def startup() -> None:
+    import os
+    os.makedirs(settings.upload_folder, exist_ok=True)
+
+
+app.include_router(router)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
