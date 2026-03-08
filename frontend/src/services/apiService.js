@@ -15,6 +15,10 @@ export const analyzePDFFile = async (file) => {
   return api.post("/upload-pdf", formData);
 };
 
+/**
+ * @param {string} question
+ * @returns {Promise<{ data: { answer: string, sources: { page: number, content: string }[] } }>}
+ */
 export const queryPDF = (question) => {
   return api.post("/query", { question });
 };

@@ -13,9 +13,11 @@ import {
   faFilePdf,
   faCloudUploadAlt,
   faArrowUp,
+  faCommentDots,
+  faBookmark,
 } from "@fortawesome/free-solid-svg-icons";
 
-library.add(faFilePdf, faCloudUploadAlt, faArrowUp);
+library.add(faFilePdf, faCloudUploadAlt, faArrowUp, faCommentDots, faBookmark);
 
 const app = createApp(App);
 
