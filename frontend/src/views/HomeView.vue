@@ -70,7 +70,7 @@
 
     <!-- 回答區 -->
     <div v-if="answer" class="answer-section">
-      <div class="answer-box" v-html="answerHtml"></div>
+      <AnswerContent :html="answerHtml" />
       <!-- 參考來源 -->
       <div v-if="sources.length > 0" class="sources-box">
         <h4 class="sources-title">參考來源</h4>
@@ -95,10 +95,11 @@ import { ref, computed } from "vue";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import VuePdfEmbed from "vue-pdf-embed";
-import { queryPDF, analyzePDFFile } from "../services/apiService";
+import { queryPDF, getApiErrorMessage } from "../services/apiService";
 import { useLoading } from "vue-loading-overlay";
+import AnswerContent from "../components/AnswerContent.vue";
+import { usePdfUpload } from "../composables/usePdfUpload";
 
-// Markdown: GFM only, output is sanitized by DOMPurify
 marked.use({ gfm: true });
 
 const question = ref("");
@@ -108,12 +109,25 @@ const answerHtml = computed(() =>
 );
 const sources = ref([]);
 const currentPage = ref(1);
-const pdfObjectUrl = ref(null);
-const selectedFile = ref(null);
-const uploadStatus = ref("請先上傳 PDF");
-const isPDFUploaded = ref(false); // 確保 PDF 上傳後才能查詢
-const fileInput = ref(null);
-const pdfPreviewRef = ref(null);
+
+const {
+  selectedFile,
+  uploadStatus,
+  isPDFUploaded,
+  currentDocumentId,
+  pdfObjectUrl,
+  fileInput,
+  pdfPreviewRef,
+  triggerFileUpload,
+  handleFileUpload,
+  analyzePDF,
+  removePDF,
+} = usePdfUpload(() => {
+  question.value = "";
+  answer.value = "";
+  sources.value = [];
+});
+
 const $loading = useLoading();
 const loadingConfig = {
   color: "#e74c3c",
@@ -125,64 +139,16 @@ const loadingConfig = {
   zIndex: 999,
 };
 
-const triggerFileUpload = () => {
-  // 觸發隱藏的 input 點擊事件
-  fileInput.value.click();
-};
-
-// 處理選擇的檔案
-const handleFileUpload = (event) => {
-  const file = event.target.files[0];
-  selectedFile.value = file;
-  if (file) {
-    uploadStatus.value = `已選擇 ${file.name}，請點擊「分析 PDF」`;
-  }
-};
-
-// 上傳 PDF
-const analyzePDF = async () => {
-  if (!selectedFile.value) return;
-  uploadStatus.value = "分析中…";
-  const loader = $loading.show(loadingConfig);
-  try {
-    await analyzePDFFile(selectedFile.value);
-    if (pdfObjectUrl.value) {
-      URL.revokeObjectURL(pdfObjectUrl.value);
-    }
-    pdfObjectUrl.value = URL.createObjectURL(selectedFile.value);
-    uploadStatus.value = "分析完成，可以開始提問";
-    isPDFUploaded.value = true;
-  } catch (error) {
-    console.error("PDF upload failed", error);
-    uploadStatus.value = "分析失敗，請重試";
-  } finally {
-    loader.hide();
-  }
-};
-
-const removePDF = () => {
-  if (pdfObjectUrl.value) {
-    URL.revokeObjectURL(pdfObjectUrl.value);
-    pdfObjectUrl.value = null;
-  }
-  selectedFile.value = null;
-  isPDFUploaded.value = false;
-  uploadStatus.value = "請先上傳 PDF";
-  if (fileInput.value) fileInput.value.value = "";
-  question.value = "";
-  answer.value = "";
-  sources.value = [];
-};
-
 const queryAPI = async () => {
+  if (!currentDocumentId.value) return;
   const loader = $loading.show(loadingConfig);
   try {
-    const response = await queryPDF(question.value);
+    const response = await queryPDF(question.value, currentDocumentId.value);
     answer.value = response.data.answer;
     sources.value = response.data.sources ?? [];
   } catch (error) {
     console.error("查詢失敗", error);
-    answer.value = "查詢失敗，請稍後再試";
+    answer.value = getApiErrorMessage(error, "query");
     sources.value = [];
   } finally {
     loader.hide();
@@ -435,18 +401,6 @@ const goToPage = (page) => {
   gap: 16px;
 }
 
-.answer-box {
-  width: 100%;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #333;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  text-align: left;
-  line-height: 1.6;
-  word-break: break-word;
-}
-
 .sources-box {
   width: 100%;
   padding: 20px;
@@ -480,77 +434,5 @@ const goToPage = (page) => {
 
 .source-page-btn:hover {
   background-color: #c94334;
-}
-
-.answer-box :deep(p) {
-  margin: 0 0 0.75em;
-}
-
-.answer-box :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
-.answer-box :deep(strong),
-.answer-box :deep(b) {
-  font-weight: 700;
-}
-
-.answer-box :deep(h1),
-.answer-box :deep(h2),
-.answer-box :deep(h3) {
-  margin: 1em 0 0.5em;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.answer-box :deep(h1) {
-  font-size: 1.35rem;
-}
-
-.answer-box :deep(h2) {
-  font-size: 1.2rem;
-}
-
-.answer-box :deep(h3) {
-  font-size: 1.05rem;
-}
-
-.answer-box :deep(ul),
-.answer-box :deep(ol) {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
-}
-
-.answer-box :deep(li) {
-  margin: 0.25em 0;
-}
-
-.answer-box :deep(code) {
-  padding: 0.15em 0.4em;
-  font-size: 0.9em;
-  background: rgba(0, 0, 0, 0.06);
-  border-radius: 4px;
-}
-
-.answer-box :deep(pre) {
-  margin: 0.75em 0;
-  padding: 12px;
-  overflow-x: auto;
-  background: rgba(0, 0, 0, 0.06);
-  border-radius: 6px;
-}
-
-.answer-box :deep(pre code) {
-  padding: 0;
-  background: none;
-}
-
-.answer-box :deep(a) {
-  color: #e74c3c;
-  text-decoration: underline;
-}
-
-.answer-box :deep(a:hover) {
-  text-decoration: none;
 }
 </style>
